@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package api;
+
+// Опция указывает, в какой Go-пакет сгенерировать код
+option go_package = "./api;api";
+
+// Описание сервиса и его методов
+service IdempotencyService {
+  rpc CheckKey (CheckKeyRequest) returns (CheckKeyResponse);
+}
+
+// Минимальные структуры сообщений
+message CheckKeyRequest {
+  string key = 1;
+}
+
+message CheckKeyResponse {
+  string status = 1;
+  int32 code = 2;
+  string body = 3;
+}
