@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: bifrost_postgres
+    environment:
+      POSTGRES_USER: bifrost_user
+      POSTGRES_PASSWORD: bifrost_password
+      POSTGRES_DB: bifrost_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
