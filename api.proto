@@ -8,6 +8,7 @@ option go_package = "./api;api";
 // Описание сервиса и его методов
 service IdempotencyService {
   rpc CheckKey (CheckKeyRequest) returns (CheckKeyResponse);
+  rpc ConfirmKey (ConfirmKeyRequest) returns (ConfirmKeyResponse);
 }
 
 // Минимальные структуры сообщений
@@ -19,4 +20,15 @@ message CheckKeyResponse {
   string status = 1;
   int32 code = 2;
   string body = 3;
+}
+
+message ConfirmKeyRequest{
+  string key = 1;
+  string status = 2;
+  int32 code = 3;
+  string body = 4;
+}
+
+message ConfirmKeyResponse {
+    bool success = 1;
 }

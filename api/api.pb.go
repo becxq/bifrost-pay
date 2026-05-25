@@ -126,6 +126,118 @@ func (x *CheckKeyResponse) GetBody() string {
 	return ""
 }
 
+type ConfirmKeyRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Key           string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"`
+	Code          int32                  `protobuf:"varint,3,opt,name=code,proto3" json:"code,omitempty"`
+	Body          string                 `protobuf:"bytes,4,opt,name=body,proto3" json:"body,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ConfirmKeyRequest) Reset() {
+	*x = ConfirmKeyRequest{}
+	mi := &file_api_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ConfirmKeyRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ConfirmKeyRequest) ProtoMessage() {}
+
+func (x *ConfirmKeyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ConfirmKeyRequest.ProtoReflect.Descriptor instead.
+func (*ConfirmKeyRequest) Descriptor() ([]byte, []int) {
+	return file_api_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *ConfirmKeyRequest) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
+func (x *ConfirmKeyRequest) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *ConfirmKeyRequest) GetCode() int32 {
+	if x != nil {
+		return x.Code
+	}
+	return 0
+}
+
+func (x *ConfirmKeyRequest) GetBody() string {
+	if x != nil {
+		return x.Body
+	}
+	return ""
+}
+
+type ConfirmKeyResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ConfirmKeyResponse) Reset() {
+	*x = ConfirmKeyResponse{}
+	mi := &file_api_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ConfirmKeyResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ConfirmKeyResponse) ProtoMessage() {}
+
+func (x *ConfirmKeyResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ConfirmKeyResponse.ProtoReflect.Descriptor instead.
+func (*ConfirmKeyResponse) Descriptor() ([]byte, []int) {
+	return file_api_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *ConfirmKeyResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
 var File_api_proto protoreflect.FileDescriptor
 
 const file_api_proto_rawDesc = "" +
@@ -136,9 +248,18 @@ const file_api_proto_rawDesc = "" +
 	"\x10CheckKeyResponse\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\tR\x06status\x12\x12\n" +
 	"\x04code\x18\x02 \x01(\x05R\x04code\x12\x12\n" +
-	"\x04body\x18\x03 \x01(\tR\x04body2M\n" +
+	"\x04body\x18\x03 \x01(\tR\x04body\"e\n" +
+	"\x11ConfirmKeyRequest\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x16\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\x12\x12\n" +
+	"\x04code\x18\x03 \x01(\x05R\x04code\x12\x12\n" +
+	"\x04body\x18\x04 \x01(\tR\x04body\".\n" +
+	"\x12ConfirmKeyResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess2\x8c\x01\n" +
 	"\x12IdempotencyService\x127\n" +
-	"\bCheckKey\x12\x14.api.CheckKeyRequest\x1a\x15.api.CheckKeyResponseB\vZ\t./api;apib\x06proto3"
+	"\bCheckKey\x12\x14.api.CheckKeyRequest\x1a\x15.api.CheckKeyResponse\x12=\n" +
+	"\n" +
+	"ConfirmKey\x12\x16.api.ConfirmKeyRequest\x1a\x17.api.ConfirmKeyResponseB\vZ\t./api;apib\x06proto3"
 
 var (
 	file_api_proto_rawDescOnce sync.Once
@@ -152,16 +273,20 @@ func file_api_proto_rawDescGZIP() []byte {
 	return file_api_proto_rawDescData
 }
 
-var file_api_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_api_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_api_proto_goTypes = []any{
-	(*CheckKeyRequest)(nil),  // 0: api.CheckKeyRequest
-	(*CheckKeyResponse)(nil), // 1: api.CheckKeyResponse
+	(*CheckKeyRequest)(nil),    // 0: api.CheckKeyRequest
+	(*CheckKeyResponse)(nil),   // 1: api.CheckKeyResponse
+	(*ConfirmKeyRequest)(nil),  // 2: api.ConfirmKeyRequest
+	(*ConfirmKeyResponse)(nil), // 3: api.ConfirmKeyResponse
 }
 var file_api_proto_depIdxs = []int32{
 	0, // 0: api.IdempotencyService.CheckKey:input_type -> api.CheckKeyRequest
-	1, // 1: api.IdempotencyService.CheckKey:output_type -> api.CheckKeyResponse
-	1, // [1:2] is the sub-list for method output_type
-	0, // [0:1] is the sub-list for method input_type
+	2, // 1: api.IdempotencyService.ConfirmKey:input_type -> api.ConfirmKeyRequest
+	1, // 2: api.IdempotencyService.CheckKey:output_type -> api.CheckKeyResponse
+	3, // 3: api.IdempotencyService.ConfirmKey:output_type -> api.ConfirmKeyResponse
+	2, // [2:4] is the sub-list for method output_type
+	0, // [0:2] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name
 	0, // [0:0] is the sub-list for extension extendee
 	0, // [0:0] is the sub-list for field type_name
@@ -178,7 +303,7 @@ func file_api_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_proto_rawDesc), len(file_api_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

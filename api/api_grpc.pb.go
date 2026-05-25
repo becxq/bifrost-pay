@@ -19,7 +19,8 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	IdempotencyService_CheckKey_FullMethodName = "/api.IdempotencyService/CheckKey"
+	IdempotencyService_CheckKey_FullMethodName   = "/api.IdempotencyService/CheckKey"
+	IdempotencyService_ConfirmKey_FullMethodName = "/api.IdempotencyService/ConfirmKey"
 )
 
 // IdempotencyServiceClient is the client API for IdempotencyService service.
@@ -29,6 +30,7 @@ const (
 // Описание сервиса и его методов
 type IdempotencyServiceClient interface {
 	CheckKey(ctx context.Context, in *CheckKeyRequest, opts ...grpc.CallOption) (*CheckKeyResponse, error)
+	ConfirmKey(ctx context.Context, in *ConfirmKeyRequest, opts ...grpc.CallOption) (*ConfirmKeyResponse, error)
 }
 
 type idempotencyServiceClient struct {
@@ -49,6 +51,16 @@ func (c *idempotencyServiceClient) CheckKey(ctx context.Context, in *CheckKeyReq
 	return out, nil
 }
 
+func (c *idempotencyServiceClient) ConfirmKey(ctx context.Context, in *ConfirmKeyRequest, opts ...grpc.CallOption) (*ConfirmKeyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ConfirmKeyResponse)
+	err := c.cc.Invoke(ctx, IdempotencyService_ConfirmKey_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // IdempotencyServiceServer is the server API for IdempotencyService service.
 // All implementations must embed UnimplementedIdempotencyServiceServer
 // for forward compatibility.
@@ -56,6 +68,7 @@ func (c *idempotencyServiceClient) CheckKey(ctx context.Context, in *CheckKeyReq
 // Описание сервиса и его методов
 type IdempotencyServiceServer interface {
 	CheckKey(context.Context, *CheckKeyRequest) (*CheckKeyResponse, error)
+	ConfirmKey(context.Context, *ConfirmKeyRequest) (*ConfirmKeyResponse, error)
 	mustEmbedUnimplementedIdempotencyServiceServer()
 }
 
@@ -68,6 +81,9 @@ type UnimplementedIdempotencyServiceServer struct{}
 
 func (UnimplementedIdempotencyServiceServer) CheckKey(context.Context, *CheckKeyRequest) (*CheckKeyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CheckKey not implemented")
+}
+func (UnimplementedIdempotencyServiceServer) ConfirmKey(context.Context, *ConfirmKeyRequest) (*ConfirmKeyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ConfirmKey not implemented")
 }
 func (UnimplementedIdempotencyServiceServer) mustEmbedUnimplementedIdempotencyServiceServer() {}
 func (UnimplementedIdempotencyServiceServer) testEmbeddedByValue()                            {}
@@ -108,6 +124,24 @@ func _IdempotencyService_CheckKey_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _IdempotencyService_ConfirmKey_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConfirmKeyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IdempotencyServiceServer).ConfirmKey(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: IdempotencyService_ConfirmKey_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IdempotencyServiceServer).ConfirmKey(ctx, req.(*ConfirmKeyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // IdempotencyService_ServiceDesc is the grpc.ServiceDesc for IdempotencyService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -118,6 +152,10 @@ var IdempotencyService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CheckKey",
 			Handler:    _IdempotencyService_CheckKey_Handler,
+		},
+		{
+			MethodName: "ConfirmKey",
+			Handler:    _IdempotencyService_ConfirmKey_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
