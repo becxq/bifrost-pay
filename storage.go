@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -29,17 +31,21 @@ func NewStorage(conn string) (*Storage, error) {
 	return &Storage{pool: pool}, nil
 }
 
-func (s *Storage) IsKeyExists(ctx context.Context, key string) (bool, error) {
-	var exists bool
+func (s *Storage) IsKeyExists(ctx context.Context, key string) (string, error) {
+	var status string
 
-	query := "SELECT EXISTS(SELECT 1 FROM idempotency_key WHERE key = $1)"
+	query := "SELECT status FROM idempotency_key WHERE key = $1"
 
-	err := s.pool.QueryRow(ctx, query, key).Scan(&exists)
+	err := s.pool.QueryRow(ctx, query, key).Scan(&status)
 	if err != nil {
-		return false, err
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "not_found", nil // возвращаем специальный статус "not_found"
+		}
+
+		return "", fmt.Errorf("ошибка при чтении статуса из БД: %w", err)
 	}
 
-	return exists, nil
+	return status, nil
 }
 
 func (s *Storage) CreateKey(ctx context.Context, key string) error {
@@ -50,6 +56,22 @@ func (s *Storage) CreateKey(ctx context.Context, key string) error {
 
 	if err != nil {
 		return fmt.Errorf("не удалось сохранить новый ключ: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Storage) UpdateKey(ctx context.Context, status string, key string) error {
+	query := `UPDATE idempotency_key SET status = $1, updated_time = NOW() WHERE key = $2`
+
+	result, err := s.pool.Exec(ctx, query, status, key)
+	if err != nil {
+		return fmt.Errorf("не удалось обновить статус ключа %s в БД: %w", key, err)
+	}
+
+	// Маленькая проверка для надежности: проверяем, что строка вообще обновилась
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("ключ %s не найден в базе данных для обновления", key)
 	}
 
 	return nil
