@@ -13,6 +13,7 @@ import (
 // Server — наша структура, которая будет обрабатывать gRPC запросы
 type Server struct {
 	api.UnimplementedIdempotencyServiceServer
+	db *Storage
 }
 
 // CheckKey — реализация нашего gRPC метода
@@ -25,6 +26,13 @@ func (s *Server) CheckKey(ctx context.Context, req *api.CheckKeyRequest) (*api.C
 }
 
 func main() {
+	conn := "postgres://bifrost_user:bifrost_password@localhost:5432/bifrost_db?sslmode=disable"
+
+	db, err := NewStorage(conn)
+	if err != nil {
+		log.Fatalf("Ошибка инициализации базы данных: %v", err)
+	}
+
 	// 1. Открываем TCP-порт для прослушивания
 	lis, err := net.Listen("tcp", ":50051")
 	if err != nil {
@@ -34,8 +42,7 @@ func main() {
 	// 2. Создаем новый gRPC сервер
 	grpcServer := grpc.NewServer()
 
-	// 3. Регистрируем нашу структуру на этом gRPC сервере
-	api.RegisterIdempotencyServiceServer(grpcServer, &Server{})
+	api.RegisterIdempotencyServiceServer(grpcServer, &Server{db: db})
 
 	log.Println("gRPC server is running on port :50051...")
 
