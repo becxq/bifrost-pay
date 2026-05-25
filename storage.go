@@ -41,3 +41,16 @@ func (s *Storage) IsKeyExists(ctx context.Context, key string) (bool, error) {
 
 	return exists, nil
 }
+
+func (s *Storage) CreateKey(ctx context.Context, key string) error {
+	query := `INSERT INTO idempotency_key (key, status, created_time, updated_time)
+	VALUES ($1, 'pending', NOW(), NOW())`
+
+	_, err := s.pool.Exec(ctx, query, key)
+
+	if err != nil {
+		return fmt.Errorf("не удалось сохранить новый ключ: %w", err)
+	}
+
+	return nil
+}
