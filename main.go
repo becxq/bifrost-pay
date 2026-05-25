@@ -20,24 +20,41 @@ type Server struct {
 func (s *Server) CheckKey(ctx context.Context, req *api.CheckKeyRequest) (*api.CheckKeyResponse, error) {
 	key := req.GetKey()
 
-	exists, err := s.db.IsKeyExists(ctx, key)
+	status, err := s.db.IsKeyExists(ctx, key)
 	if err != nil {
 		log.Printf("Ошибка при проверке ключа в Postgres: %v", err)
 		// Если база данных упала, мы возвращаем ошибку, чтобы gRPC сообщил клиенту о сбое
 		return nil, err
 	}
 
-	if exists {
+	switch status {
+	case "success":
 		log.Printf("Внимание: ключ %s НАЙДЕН в базе. Запрос отклонен как дубликат.", key)
 		return &api.CheckKeyResponse{
-			Status: "completed", // Говорим клиенту: всё ок, этот запрос мы уже обработали
+			Status: status, // Говорим клиенту: всё ок, этот запрос мы уже обработали
+		}, nil
+	case "pending":
+		log.Printf("Внимание: ключ %s ВСЕ ЕЩЕ в обработке. Запрос отклонен как дубликат.", key)
+		return &api.CheckKeyResponse{
+			Status: status, // Говорим клиенту: что запрос обрабатывается
+		}, nil
+	case "not_found":
+		err = s.db.CreateKey(ctx, key)
+		if err != nil {
+			log.Printf("Не удалось забронировать ключ в БД: %v", err)
+			return nil, err
+		}
+
+		return &api.CheckKeyResponse{
+			Status: "not_found",
+		}, nil
+	case "failed":
+		return &api.CheckKeyResponse{
+			Status: "failed",
 		}, nil
 	}
 
-	log.Printf("Ключ %s НЕ НАЙДЕН в базе. Запрос уникальный, можно проводить оплату.", key)
-	return &api.CheckKeyResponse{
-		Status: "not_found", // Сигнализируем, что такого ключа мы еще не видели
-	}, nil
+	return &api.CheckKeyResponse{Status: "unknown"}, nil
 }
 
 func main() {
