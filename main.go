@@ -87,7 +87,7 @@ func (s *Server) ConfirmKey(ctx context.Context, req *api.ConfirmKeyRequest) (*a
 }
 
 func main() {
-	conn := "postgres://bifrost_user:bifrost_password@localhost:5432/bifrost_db?sslmode=disable"
+	conn := "postgres://bifrost_user:bifrost_password@localhost:5433/bifrost_db?sslmode=disable"
 
 	db, err := NewStorage(conn)
 	if err != nil {
