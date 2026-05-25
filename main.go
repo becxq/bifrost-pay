@@ -18,11 +18,26 @@ type Server struct {
 
 // CheckKey — реализация нашего gRPC метода
 func (s *Server) CheckKey(ctx context.Context, req *api.CheckKeyRequest) (*api.CheckKeyResponse, error) {
-	log.Printf("Получен запрос для ключа: %s", req.GetKey())
+	key := req.GetKey()
 
-	response := api.CheckKeyResponse{Status: "pending", Body: "", Code: 0}
+	exists, err := s.db.IsKeyExists(ctx, key)
+	if err != nil {
+		log.Printf("Ошибка при проверке ключа в Postgres: %v", err)
+		// Если база данных упала, мы возвращаем ошибку, чтобы gRPC сообщил клиенту о сбое
+		return nil, err
+	}
 
-	return &response, nil
+	if exists {
+		log.Printf("Внимание: ключ %s НАЙДЕН в базе. Запрос отклонен как дубликат.", key)
+		return &api.CheckKeyResponse{
+			Status: "completed", // Говорим клиенту: всё ок, этот запрос мы уже обработали
+		}, nil
+	}
+
+	log.Printf("Ключ %s НЕ НАЙДЕН в базе. Запрос уникальный, можно проводить оплату.", key)
+	return &api.CheckKeyResponse{
+		Status: "not_found", // Сигнализируем, что такого ключа мы еще не видели
+	}, nil
 }
 
 func main() {
