@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net"
 
@@ -55,6 +56,34 @@ func (s *Server) CheckKey(ctx context.Context, req *api.CheckKeyRequest) (*api.C
 	}
 
 	return &api.CheckKeyResponse{Status: "unknown"}, nil
+}
+
+func (s *Server) ConfirmKey(ctx context.Context, req *api.ConfirmKeyRequest) (*api.ConfirmKeyResponse, error) {
+	key := req.GetKey()
+	status := req.GetStatus()
+	code := req.GetCode()
+	body := req.GetBody()
+
+	log.Printf("Получен запрос ConfirmKey для ключа: %s. Новый статус: %s", key, status)
+
+	// 2. Валидируем входящий статус на стороне Go (для безопасности)
+	if status != "success" && status != "failed" {
+		return nil, fmt.Errorf("недопустимый статус платежа: %s", status)
+	}
+
+	// 3. Стучимся в базу и сохраняем финальный результат
+	err := s.db.SavePaymentResult(ctx, key, status, code, body)
+	if err != nil {
+		log.Printf("Не удалось сохранить результат в БД: %v", err)
+		return nil, err // Если база упала, возвращаем системную ошибку
+	}
+
+	log.Printf("Результат платежа для ключа %s успешно сохранен в Postgres!", key)
+
+	// 4. Возвращаем клиенту флаг успеха
+	return &api.ConfirmKeyResponse{
+		Success: true,
+	}, nil
 }
 
 func main() {
