@@ -61,10 +61,10 @@ func (s *Storage) CreateKey(ctx context.Context, key string) error {
 	return nil
 }
 
-func (s *Storage) UpdateKey(ctx context.Context, status string, key string) error {
-	query := `UPDATE idempotency_key SET status = $1, updated_time = NOW() WHERE key = $2`
+func (s *Storage) SavePaymentResult(ctx context.Context, status string, key string, code int32, body string) error {
+	query := `UPDATE idempotency_key SET status = $1, updated_time = NOW(), status_code = $2, status_body = $3 WHERE key = $4`
 
-	result, err := s.pool.Exec(ctx, query, status, key)
+	result, err := s.pool.Exec(ctx, query, status, code, body, key)
 	if err != nil {
 		return fmt.Errorf("не удалось обновить статус ключа %s в БД: %w", key, err)
 	}
