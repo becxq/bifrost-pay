@@ -28,3 +28,16 @@ func NewStorage(conn string) (*Storage, error) {
 	log.Println("Успешное подключение к PostgreSQL пул запущен")
 	return &Storage{pool: pool}, nil
 }
+
+func (s *Storage) IsKeyExists(ctx context.Context, key string) (bool, error) {
+	var exists bool
+
+	query := "SELECT EXISTS(SELECT 1 FROM idempotency_key WHERE key = $1)"
+
+	err := s.pool.QueryRow(ctx, query, key).Scan(&exists)
+	if err != nil {
+		return false, err
+	}
+
+	return exists, nil
+}
