@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"time"
 
 	"github.com/becxq/bifrost-pay/api"
+	"github.com/redis/go-redis/v9"
 
 	"google.golang.org/grpc"
 )
@@ -14,7 +16,8 @@ import (
 // Server — наша структура, которая будет обрабатывать gRPC запросы
 type Server struct {
 	api.UnimplementedIdempotencyServiceServer
-	db *Storage
+	db  *Storage
+	rds *redis.Client
 }
 
 // CheckKey — реализация нашего gRPC метода
@@ -94,6 +97,23 @@ func main() {
 		log.Fatalf("Ошибка инициализации базы данных: %v", err)
 	}
 
+	ctx := context.Background()
+
+	rds := redis.NewClient(&redis.Options{
+		Addr:     "localhost:6379",
+		Password: "",
+		DB:       0,
+	})
+
+	pingCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	_, err = rds.Ping(pingCtx).Result()
+	if err != nil {
+		log.Fatalf("Ошибка инициализации Redis: %v", err)
+	}
+	log.Println("Успешное подключение к Redis!")
+
 	// 1. Открываем TCP-порт для прослушивания
 	lis, err := net.Listen("tcp", ":50051")
 	if err != nil {
@@ -103,7 +123,7 @@ func main() {
 	// 2. Создаем новый gRPC сервер
 	grpcServer := grpc.NewServer()
 
-	api.RegisterIdempotencyServiceServer(grpcServer, &Server{db: db})
+	api.RegisterIdempotencyServiceServer(grpcServer, &Server{db: db, rds: rds})
 
 	log.Println("gRPC server is running on port :50051...")
 
