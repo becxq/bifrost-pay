@@ -24,6 +24,31 @@ type Server struct {
 func (s *Server) CheckKey(ctx context.Context, req *api.CheckKeyRequest) (*api.CheckKeyResponse, error) {
 	key := req.GetKey()
 
+	// 1. Сначала ищем готовый ответ в быстром кэше Redis
+
+	cachedStatus, err := s.rds.Get(ctx, "cache:"+key).Result()
+
+	if err == nil {
+		log.Printf("Ура! Ключ %s найден в кэше Redis. Статус: %s", key, cachedStatus)
+		return &api.CheckKeyResponse{
+			Status: cachedStatus, // Мгновенно отдаем результат из памяти
+		}, nil
+
+	}
+
+	lockKey := "lock: " + key
+
+	success, rdsError := s.rds.SetNX(ctx, lockKey, "in_progress", 10*time.Second).Result()
+
+	if rdsError != nil {
+		log.Fatalf("Ошибка Redis при попытке поставить замок: %v", rdsError)
+	}
+
+	if rdsError == nil && !success {
+		log.Printf("Запрос с ключом %s заблокирован: дубликат уже обрабатывается", key)
+		return &api.CheckKeyResponse{Status: "pending"}, nil
+	}
+
 	status, err := s.db.IsKeyExists(ctx, key)
 	if err != nil {
 		log.Printf("Ошибка при проверке ключа в Postgres: %v", err)
