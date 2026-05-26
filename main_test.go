@@ -62,7 +62,7 @@ func TestCheckKey_Concurrency(t *testing.T) {
 
 	expectedPending := 9
 	if pendingCount != expectedPending {
-		t.Errorf("Провал! Вышибала пропустил лишнее. Ожидали блок 9 запросов, а заблокировано: %d", pendingCount)
+		t.Errorf("Провал! Ожидали блок 9 запросов, а заблокировано: %d", pendingCount)
 	} else {
 		t.Logf("Успех! Из 10 одновременных запросов Redis четко заблокировал %d дубликатов.", pendingCount)
 	}
