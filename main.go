@@ -13,25 +13,21 @@ import (
 	"google.golang.org/grpc"
 )
 
-// Server — наша структура, которая будет обрабатывать gRPC запросы
 type Server struct {
 	api.UnimplementedIdempotencyServiceServer
 	db  *Storage
 	rds *redis.Client
 }
 
-// CheckKey — реализация нашего gRPC метода
 func (s *Server) CheckKey(ctx context.Context, req *api.CheckKeyRequest) (*api.CheckKeyResponse, error) {
 	key := req.GetKey()
-
-	// 1. Сначала ищем готовый ответ в быстром кэше Redis
 
 	cachedStatus, err := s.rds.Get(ctx, "cache:"+key).Result()
 
 	if err == nil {
 		log.Printf("Ура! Ключ %s найден в кэше Redis. Статус: %s", key, cachedStatus)
 		return &api.CheckKeyResponse{
-			Status: cachedStatus, // Мгновенно отдаем результат из памяти
+			Status: cachedStatus,
 		}, nil
 
 	}
@@ -52,7 +48,6 @@ func (s *Server) CheckKey(ctx context.Context, req *api.CheckKeyRequest) (*api.C
 	status, err := s.db.IsKeyExists(ctx, key)
 	if err != nil {
 		log.Printf("Ошибка при проверке ключа в Postgres: %v", err)
-		// Если база данных упала, мы возвращаем ошибку, чтобы gRPC сообщил клиенту о сбое
 		return nil, err
 	}
 
@@ -60,12 +55,12 @@ func (s *Server) CheckKey(ctx context.Context, req *api.CheckKeyRequest) (*api.C
 	case "success":
 		log.Printf("Внимание: ключ %s НАЙДЕН в базе. Запрос отклонен как дубликат.", key)
 		return &api.CheckKeyResponse{
-			Status: status, // Говорим клиенту: всё ок, этот запрос мы уже обработали
+			Status: status,
 		}, nil
 	case "pending":
 		log.Printf("Внимание: ключ %s ВСЕ ЕЩЕ в обработке. Запрос отклонен как дубликат.", key)
 		return &api.CheckKeyResponse{
-			Status: status, // Говорим клиенту: что запрос обрабатывается
+			Status: status,
 		}, nil
 	case "not_found":
 		err = s.db.CreateKey(ctx, key)
@@ -94,16 +89,14 @@ func (s *Server) ConfirmKey(ctx context.Context, req *api.ConfirmKeyRequest) (*a
 
 	log.Printf("Получен запрос ConfirmKey для ключа: %s. Новый статус: %s", key, status)
 
-	// 2. Валидируем входящий статус на стороне Go (для безопасности)
 	if status != "success" && status != "failed" {
 		return nil, fmt.Errorf("недопустимый статус платежа: %s", status)
 	}
 
-	// 3. Стучимся в базу и сохраняем финальный результат
 	err := s.db.SavePaymentResult(ctx, key, status, code, body)
 	if err != nil {
 		log.Printf("Не удалось сохранить результат в БД: %v", err)
-		return nil, err // Если база упала, возвращаем системную ошибку
+		return nil, err
 	}
 
 	log.Printf("Результат платежа для ключа %s успешно сохранен в Postgres!", key)
@@ -112,11 +105,8 @@ func (s *Server) ConfirmKey(ctx context.Context, req *api.ConfirmKeyRequest) (*a
 
 	if err != nil {
 		log.Printf("Не удалось сохранить статус в кэш Redis: %v", err)
-		// Ошибка кэша не должна ломать логику, в Postgres-то всё записалось
-
 	}
 
-	// 4. Возвращаем клиенту флаг успеха
 	return &api.ConfirmKeyResponse{
 		Success: true,
 	}, nil
@@ -147,20 +137,17 @@ func main() {
 	}
 	log.Println("Успешное подключение к Redis!")
 
-	// 1. Открываем TCP-порт для прослушивания
 	lis, err := net.Listen("tcp", ":50051")
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
 
-	// 2. Создаем новый gRPC сервер
 	grpcServer := grpc.NewServer()
 
 	api.RegisterIdempotencyServiceServer(grpcServer, &Server{db: db, rds: rds})
 
 	log.Println("gRPC server is running on port :50051...")
 
-	// 4. Запускаем сервер
 	if err := grpcServer.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}

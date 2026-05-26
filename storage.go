@@ -39,7 +39,7 @@ func (s *Storage) IsKeyExists(ctx context.Context, key string) (string, error) {
 	err := s.pool.QueryRow(ctx, query, key).Scan(&status)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return "not_found", nil // возвращаем специальный статус "not_found"
+			return "not_found", nil
 		}
 
 		return "", fmt.Errorf("ошибка при чтении статуса из БД: %w", err)
@@ -69,7 +69,6 @@ func (s *Storage) SavePaymentResult(ctx context.Context, status string, key stri
 		return fmt.Errorf("не удалось обновить статус ключа %s в БД: %w", key, err)
 	}
 
-	// Маленькая проверка для надежности: проверяем, что строка вообще обновилась
 	if result.RowsAffected() == 0 {
 		return fmt.Errorf("ключ %s не найден в базе данных для обновления", key)
 	}
