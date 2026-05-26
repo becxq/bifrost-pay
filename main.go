@@ -108,6 +108,14 @@ func (s *Server) ConfirmKey(ctx context.Context, req *api.ConfirmKeyRequest) (*a
 
 	log.Printf("Результат платежа для ключа %s успешно сохранен в Postgres!", key)
 
+	err = s.rds.Set(ctx, "cache:"+key, status, 24*time.Hour).Err()
+
+	if err != nil {
+		log.Printf("Не удалось сохранить статус в кэш Redis: %v", err)
+		// Ошибка кэша не должна ломать логику, в Postgres-то всё записалось
+
+	}
+
 	// 4. Возвращаем клиенту флаг успеха
 	return &api.ConfirmKeyResponse{
 		Success: true,
