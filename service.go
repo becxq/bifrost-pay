@@ -16,16 +16,17 @@ func (s *Server) CheckKey(ctx context.Context, req *api.CheckKeyRequest) (*api.C
 	if err == nil {
 		log.Printf("Ура! Ключ %s найден в кэше Redis. Статус: %s", key, cachedStatus)
 		return &api.CheckKeyResponse{Status: cachedStatus}, nil // быстро возвращаем ответ
-
 	}
 
 	success, rdbError := s.rdb.SetNX(ctx, key) // Ставим лок на наш ключ
-	if rdbError == nil && !success {           // Уже обрабатывается
+	if rdbError != nil {
+		log.Printf("Ошибка распределенного замка Redis: %v", rdbError)
+		return nil, rdbError
+	}
+
+	if !success { // Уже обрабатывается
 		log.Printf("Запрос с ключом %s заблокирован: дубликат уже обрабатывается", key)
 		return &api.CheckKeyResponse{Status: "pending"}, nil
-	} else if success { // Допуск
-		log.Printf("Запрос с ключом %s допущен!", key)
-		return &api.CheckKeyResponse{Status: "success"}, nil
 	}
 
 	status, err := s.db.IsKeyExists(ctx, key) // Проверка существования ключа в БД
@@ -35,22 +36,20 @@ func (s *Server) CheckKey(ctx context.Context, req *api.CheckKeyRequest) (*api.C
 	}
 
 	switch status {
-	case "success":
-		log.Printf("Внимание: ключ %s НАЙДЕН в базе. Запрос отклонен как дубликат.", key)
+	case "success", "failed", "pending":
+		log.Printf("Внимание: ключ %s НАЙДЕН в базе со статусом %s. Запрос отклонен.", key, status)
 		return &api.CheckKeyResponse{Status: status}, nil
-	case "pending":
-		log.Printf("Внимание: ключ %s ВСЕ ЕЩЕ в обработке. Запрос отклонен как дубликат.", key)
-		return &api.CheckKeyResponse{Status: status}, nil
+
 	case "not_found":
+		// Ключ абсолютно новый. Бронируем его в Postgres.
 		err = s.db.CreateKey(ctx, key)
 		if err != nil {
 			log.Printf("Не удалось забронировать ключ в БД: %v", err)
 			return nil, err
 		}
 
+		log.Printf("Запрос с ключом %s допущен! Статус: not_found", key)
 		return &api.CheckKeyResponse{Status: "not_found"}, nil
-	case "failed":
-		return &api.CheckKeyResponse{Status: "failed"}, nil
 	}
 
 	return &api.CheckKeyResponse{Status: "unknown"}, nil
