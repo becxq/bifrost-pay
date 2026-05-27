@@ -11,14 +11,14 @@ import (
 func (s *Server) CheckKey(ctx context.Context, req *api.CheckKeyRequest) (*api.CheckKeyResponse, error) {
 	key := req.GetKey()
 
-	cachedStatus, err := s.rdb.Get(ctx, key) // Запрашиваем ключ из кэша редиса
+	cachedStatus, err := s.rdb.GetKey(ctx, key) // Запрашиваем ключ из кэша редиса
 
 	if err == nil {
 		log.Printf("Ура! Ключ %s найден в кэше Redis. Статус: %s", key, cachedStatus)
 		return &api.CheckKeyResponse{Status: cachedStatus}, nil // быстро возвращаем ответ
 	}
 
-	success, rdbError := s.rdb.SetNX(ctx, key) // Ставим лок на наш ключ
+	success, rdbError := s.rdb.SetKeyLock(ctx, key) // Ставим лок на наш ключ
 	if rdbError != nil {
 		log.Printf("Ошибка распределенного замка Redis: %v", rdbError)
 		return nil, rdbError
@@ -75,7 +75,7 @@ func (s *Server) ConfirmKey(ctx context.Context, req *api.ConfirmKeyRequest) (*a
 
 	log.Printf("Результат платежа для ключа %s успешно сохранен в Postgres!", key)
 
-	err = s.rdb.Set(ctx, key, status) // Сохраняем в кэш на сутки
+	err = s.rdb.SetKeyCache(ctx, key, status) // Сохраняем в кэш на сутки
 
 	if err != nil {
 		log.Printf("Не удалось сохранить статус в кэш Redis: %v", err)

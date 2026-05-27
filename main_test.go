@@ -125,7 +125,7 @@ func BenchmarkCheckKey_Cached(b *testing.B) {
 	key := "bench-cached-key"
 
 	// Предварительно сохраняем в кэш
-	_ = srv.rdb.Set(ctx, key, "success")
+	_ = srv.rdb.SetKeyCache(ctx, key, "success")
 
 	b.ResetTimer()
 
