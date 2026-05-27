@@ -11,26 +11,24 @@ import (
 func (s *Server) CheckKey(ctx context.Context, req *api.CheckKeyRequest) (*api.CheckKeyResponse, error) {
 	key := req.GetKey()
 
-	cachedStatus, err := s.rdb.Get(ctx, key)
+	cachedStatus, err := s.rdb.Get(ctx, key) // Запрашиваем ключ из кэша редиса
 
 	if err == nil {
 		log.Printf("Ура! Ключ %s найден в кэше Redis. Статус: %s", key, cachedStatus)
-		return &api.CheckKeyResponse{
-			Status: cachedStatus,
-		}, nil
+		return &api.CheckKeyResponse{Status: cachedStatus}, nil // быстро возвращаем ответ
 
 	}
 
-	success, rdbError := s.rdb.SetNX(ctx, key)
-	if rdbError == nil && !success {
+	success, rdbError := s.rdb.SetNX(ctx, key) // Ставим лок на наш ключ
+	if rdbError == nil && !success {           // Уже обрабатывается
 		log.Printf("Запрос с ключом %s заблокирован: дубликат уже обрабатывается", key)
 		return &api.CheckKeyResponse{Status: "pending"}, nil
-	} else if success {
+	} else if success { // Допуск
 		log.Printf("Запрос с ключом %s допущен!", key)
 		return &api.CheckKeyResponse{Status: "success"}, nil
 	}
 
-	status, err := s.db.IsKeyExists(ctx, key)
+	status, err := s.db.IsKeyExists(ctx, key) // Проверка существования ключа в БД
 	if err != nil {
 		log.Printf("Ошибка при проверке ключа в Postgres: %v", err)
 		return nil, err
@@ -70,7 +68,7 @@ func (s *Server) ConfirmKey(ctx context.Context, req *api.ConfirmKeyRequest) (*a
 		return nil, fmt.Errorf("недопустимый статус платежа: %s", status)
 	}
 
-	err := s.db.SavePaymentResult(ctx, key, status, code, body)
+	err := s.db.SavePaymentResult(ctx, status, key, code, body)
 	if err != nil {
 		log.Printf("Не удалось сохранить результат в БД: %v", err)
 		return nil, err
@@ -78,7 +76,7 @@ func (s *Server) ConfirmKey(ctx context.Context, req *api.ConfirmKeyRequest) (*a
 
 	log.Printf("Результат платежа для ключа %s успешно сохранен в Postgres!", key)
 
-	err = s.rdb.Set(ctx, key, status)
+	err = s.rdb.Set(ctx, key, status) // Сохраняем в кэш на сутки
 
 	if err != nil {
 		log.Printf("Не удалось сохранить статус в кэш Redis: %v", err)
