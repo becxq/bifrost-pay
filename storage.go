@@ -49,8 +49,11 @@ func (s *Storage) IsKeyExists(ctx context.Context, key string) (string, error) {
 }
 
 func (s *Storage) CreateKey(ctx context.Context, key string) error {
-	query := `INSERT INTO idempotency_key (key, status, created_time, updated_time)
-	VALUES ($1, 'pending', NOW(), NOW())`
+	query := `
+	INSERT INTO idempotency_key (key, status, created_time, updated_time)
+	VALUES ($1, 'pending', NOW(), NOW()) 
+	ON CONFLICT(key) 
+	DO NOTHING`
 
 	_, err := s.pool.Exec(ctx, query, key)
 
@@ -62,7 +65,10 @@ func (s *Storage) CreateKey(ctx context.Context, key string) error {
 }
 
 func (s *Storage) SavePaymentResult(ctx context.Context, status string, key string, code int32, body string) error {
-	query := `UPDATE idempotency_key SET status = $1, updated_time = NOW(), status_code = $2, status_body = $3 WHERE key = $4`
+	query := `BEGIN;
+	SELECT status FROM idempotency_key WHERE key = $4 FOR UPDATE;
+
+	UPDATE idempotency_key SET status = $1, updated_time = NOW(), status_code = $2, status_body = $3 WHERE key = $4`
 
 	result, err := s.pool.Exec(ctx, query, status, code, body, key)
 	if err != nil {
