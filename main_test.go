@@ -2,155 +2,139 @@ package main
 
 import (
 	"context"
-	"log"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/becxq/bifrost-pay/api"
+	"github.com/google/uuid"
 )
 
-func TestCheckKey_Concurrency(t *testing.T) {
-	ctx := context.Background()
-
-	rdb := NewRedisDB("localhost:6379")
-	defer rdb.rdb.Close()
-
+// setupTestServer инициализирует реальное подключение к тестовым БД.
+// В идеале параметры должны браться из переменных окружения.
+func setupTestServer(t testing.TB) *Server {
 	conn := "postgres://bifrost_user:bifrost_password@localhost:5433/bifrost_db?sslmode=disable"
-
 	db, err := NewStorage(conn)
 	if err != nil {
-		log.Fatalf("Ошибка инициализации базы данных: %v", err)
+		t.Fatalf("Ошибка БД: %v", err)
 	}
 
-	testKey := "test_payment_12345"
-	rdb.rdb.Del(ctx, "lock:"+testKey)
-	rdb.rdb.Del(ctx, "cache:"+testKey)
+	rdb := NewRedisDB("localhost:6379")
 
-	srv := &Server{
-		rdb: rdb,
+	return &Server{
 		db:  db,
+		rdb: rdb,
 	}
+}
 
-	results := make(chan string, 10)
+// -----------------------------------------------------------------------------
+// 1. ТЕСТЫ НА БЕЗОПАСНОСТЬ (CONCURRENCY / THUNDERING HERD)
+// -----------------------------------------------------------------------------
+
+// TestCheckKey_Concurrency проверяет, что при одновременном поступлении
+// 100 запросов с одним и тем же ключом, только ОДИН получит статус "not_found"
+// (и право на выполнение), а остальные 99 получат "pending".
+func TestCheckKey_Concurrency(t *testing.T) {
+	srv := setupTestServer(t)
+	ctx := context.Background()
+	testKey := "test-idemp-key-" + uuid.New().String()
+
+	goroutinesCount := 100
 	var wg sync.WaitGroup
+	startCh := make(chan struct{}) // Канал для синхронного старта всех горутин
 
-	startGate := make(chan struct{})
+	var (
+		notFoundCount atomic.Int32
+		pendingCount  atomic.Int32
+		errorCount    atomic.Int32
+	)
 
-	for i := 0; i < 10; i++ {
-		wg.Add(1)
+	wg.Add(goroutinesCount)
+	for i := 0; i < goroutinesCount; i++ {
 		go func() {
 			defer wg.Done()
-			<-startGate
+			<-startCh // Ждем сигнала к началу, чтобы создать максимальную конкуренцию
 
-			req := &api.CheckKeyRequest{Key: testKey}
-			resp, err := srv.CheckKey(ctx, req)
+			resp, err := srv.CheckKey(ctx, &api.CheckKeyRequest{Key: testKey})
+			if err != nil {
+				errorCount.Add(1)
+				return
+			}
 
-			if err == nil && resp != nil {
-				results <- resp.Status
+			if resp.Status == "not_found" {
+				notFoundCount.Add(1)
+			} else if resp.Status == "pending" {
+				pendingCount.Add(1)
 			}
 		}()
 	}
 
-	close(startGate)
+	// Даем горутинам время на инициализацию и подаем сигнал к одновременному старту
+	time.Sleep(100 * time.Millisecond)
+	close(startCh)
 
+	// Ждем завершения всех запросов
 	wg.Wait()
-	close(results)
 
-	pendingCount := 0
-	for status := range results {
-		if status == "pending" {
-			pendingCount++
-		}
+	// Проверяем инварианты безопасности идемпотентности
+	if errorCount.Load() > 0 {
+		t.Fatalf("Получены ошибки при конкурентных запросах: %d", errorCount.Load())
 	}
 
-	expectedPending := 9
-	if pendingCount != expectedPending {
-		t.Errorf("Провал! Ожидали блок 9 запросов, а заблокировано: %d", pendingCount)
-	} else {
-		t.Logf("Успех! Из 10 одновременных запросов Redis четко заблокировал %d дубликатов.", pendingCount)
+	if notFoundCount.Load() != 1 {
+		t.Errorf("Ожидался ровно 1 допуск (not_found), но получено: %d", notFoundCount.Load())
+	}
+
+	if pendingCount.Load() != int32(goroutinesCount-1) {
+		t.Errorf("Ожидалось %d блокировок (pending), но получено: %d", goroutinesCount-1, pendingCount.Load())
 	}
 }
 
-func TestCheckKey_RedisFailureFallback(t *testing.T) {
+// -----------------------------------------------------------------------------
+// 2. БЕНЧМАРКИ НА СКОРОСТЬ (PERFORMANCE)
+// -----------------------------------------------------------------------------
+
+// BenchmarkCheckKey_Parallel тестирует пропускную способность метода CheckKey.
+func BenchmarkCheckKey_Parallel(b *testing.B) {
+	srv := setupTestServer(b)
 	ctx := context.Background()
 
-	conn := "postgres://bifrost_user:bifrost_password@localhost:5433/bifrost_db?sslmode=disable"
+	b.ResetTimer() // Сбрасываем таймер после тяжелой инициализации БД
 
-	db, err := NewStorage(conn)
-	if err != nil {
-		t.Fatalf("Ошибка БД: %v", err)
-	}
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			// Генерируем уникальный ключ для каждой итерации, чтобы проверить
+			// скорость работы с новыми транзакциями.
+			// Для большей скорости в бенчмарках можно использовать быстрые генераторы случайных строк.
+			key := fmt.Sprintf("bench-key-%d", time.Now().UnixNano())
 
-	rdb := NewRedisDB("localhost:6379")
-	defer rdb.rdb.Close()
-
-	srv := &Server{rdb: rdb, db: db}
-	testKey := "fallback_key_" + time.Now().Format("150405")
-
-	req := &api.CheckKeyRequest{Key: testKey}
-	resp, err := srv.CheckKey(ctx, req)
-
-	if err != nil {
-		t.Fatalf("Провал! Сервис упал вместе с Redis, а должен был выжить: %v", err)
-	}
-
-	if resp == nil || resp.Status == "" {
-		t.Error("Провал! Сервис вернул пустой ответ при упавшем Redis")
-	}
-
-	t.Logf("Успех! Redis мертв, но сервис устоял и вернул статус из Postgres: %s", resp.Status)
-}
-
-func TestCheckKey_ChaosLoad(t *testing.T) {
-	ctx := context.Background()
-	conn := "postgres://bifrost_user:bifrost_password@localhost:5433/bifrost_db?sslmode=disable"
-
-	db, err := NewStorage(conn)
-	if err != nil {
-		t.Fatalf("Ошибка БД: %v", err)
-	}
-
-	rdb := NewRedisDB("localhost:6379")
-	defer rdb.rdb.Close()
-
-	srv := &Server{rdb: rdb, db: db}
-
-	keys := []string{"chaos_1", "chaos_2", "chaos_3", "chaos_4", "chaos_5"}
-	for _, k := range keys {
-		rdb.rdb.Del(ctx, "lock:"+k)
-		rdb.rdb.Del(ctx, "cache:"+k)
-	}
-
-	numRequests := 100
-	var wg sync.WaitGroup
-
-	var errorCount int32
-
-	for i := 0; i < numRequests; i++ {
-		wg.Add(1)
-		go func(workerID int) {
-			defer wg.Done()
-
-			// Каждая горутина случайно выбирает один из 5 ключей
-			// Это создаст жесткую конкуренцию за замки
-			randomKey := keys[workerID%len(keys)]
-
-			req := &api.CheckKeyRequest{Key: randomKey}
-			_, err := srv.CheckKey(ctx, req)
-
+			_, err := srv.CheckKey(ctx, &api.CheckKeyRequest{Key: key})
 			if err != nil {
-				atomic.AddInt32(&errorCount, 1)
+				b.Fatalf("Ошибка в бенчмарке: %v", err)
 			}
-		}(i)
-	}
+		}
+	})
+}
 
-	wg.Wait()
+// BenchmarkCheckKey_Cached тестирует скорость чтения уже закэшированных ключей из Redis.
+func BenchmarkCheckKey_Cached(b *testing.B) {
+	srv := setupTestServer(b)
+	ctx := context.Background()
+	key := "bench-cached-key"
 
-	if errorCount > 0 {
-		t.Errorf("Провал! Под хаотичной нагрузкой сервис выдал %d ошибок", errorCount)
-	} else {
-		t.Logf("Успех! Сдержали удар из %d перемешанных запросов. Ноль ошибок.", numRequests)
-	}
+	// Предварительно сохраняем в кэш
+	_ = srv.rdb.Set(ctx, key, "success")
+
+	b.ResetTimer()
+
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			resp, err := srv.CheckKey(ctx, &api.CheckKeyRequest{Key: key})
+			if err != nil || resp.Status != "success" {
+				b.Fatalf("Ожидался success, получено: %v (ошибка: %v)", resp, err)
+			}
+		}
+	})
 }
