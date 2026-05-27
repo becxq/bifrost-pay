@@ -36,13 +36,12 @@ func (s *Server) CheckKey(ctx context.Context, req *api.CheckKeyRequest) (*api.C
 
 	success, rdsError := s.rds.SetNX(ctx, lockKey, "in_progress", 10*time.Second).Result()
 
-	if rdsError != nil {
-		log.Fatalf("Ошибка Redis при попытке поставить замок: %v", rdsError)
-	}
-
 	if rdsError == nil && !success {
 		log.Printf("Запрос с ключом %s заблокирован: дубликат уже обрабатывается", key)
 		return &api.CheckKeyResponse{Status: "pending"}, nil
+	} else if success {
+		log.Printf("Запрос с ключом %s допущен!", key)
+		return &api.CheckKeyResponse{Status: "success"}, nil
 	}
 
 	status, err := s.db.IsKeyExists(ctx, key)
