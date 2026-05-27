@@ -9,16 +9,13 @@ import (
 	"time"
 
 	"github.com/becxq/bifrost-pay/api"
-	"github.com/redis/go-redis/v9"
 )
 
 func TestCheckKey_Concurrency(t *testing.T) {
 	ctx := context.Background()
 
-	rds := redis.NewClient(&redis.Options{
-		Addr: "localhost:6379",
-	})
-	defer rds.Close()
+	rdb := NewRedisDB("localhost:6379")
+	defer rdb.rdb.Close()
 
 	conn := "postgres://bifrost_user:bifrost_password@localhost:5433/bifrost_db?sslmode=disable"
 
@@ -28,11 +25,11 @@ func TestCheckKey_Concurrency(t *testing.T) {
 	}
 
 	testKey := "test_payment_12345"
-	rds.Del(ctx, "lock:"+testKey)
-	rds.Del(ctx, "cache:"+testKey)
+	rdb.rdb.Del(ctx, "lock:"+testKey)
+	rdb.rdb.Del(ctx, "cache:"+testKey)
 
 	srv := &Server{
-		rds: rds,
+		rdb: rdb,
 		db:  db,
 	}
 
@@ -86,12 +83,11 @@ func TestCheckKey_RedisFailureFallback(t *testing.T) {
 		t.Fatalf("Ошибка БД: %v", err)
 	}
 
-	rds := redis.NewClient(&redis.Options{Addr: "localhost:6379"})
+	rdb := NewRedisDB("localhost:6379")
+	defer rdb.rdb.Close()
 
-	srv := &Server{rds: rds, db: db}
+	srv := &Server{rdb: rdb, db: db}
 	testKey := "fallback_key_" + time.Now().Format("150405")
-
-	rds.Close()
 
 	req := &api.CheckKeyRequest{Key: testKey}
 	resp, err := srv.CheckKey(ctx, req)
@@ -116,15 +112,15 @@ func TestCheckKey_ChaosLoad(t *testing.T) {
 		t.Fatalf("Ошибка БД: %v", err)
 	}
 
-	rds := redis.NewClient(&redis.Options{Addr: "localhost:6379"})
-	defer rds.Close()
+	rdb := NewRedisDB("localhost:6379")
+	defer rdb.rdb.Close()
 
-	srv := &Server{rds: rds, db: db}
+	srv := &Server{rdb: rdb, db: db}
 
 	keys := []string{"chaos_1", "chaos_2", "chaos_3", "chaos_4", "chaos_5"}
 	for _, k := range keys {
-		rds.Del(ctx, "lock:"+k)
-		rds.Del(ctx, "cache:"+k)
+		rdb.rdb.Del(ctx, "lock:"+k)
+		rdb.rdb.Del(ctx, "cache:"+k)
 	}
 
 	numRequests := 100
